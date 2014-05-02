@@ -17,8 +17,8 @@ A utility, [Houston2GeminiGUI](https://github.com/daihenka/Houston2GeminiGUI), h
 There are two demo addons in [examples/](examples/) that showcase various methods on the uses of GeminiGUI.
 
 ## Links
-* [API](wiki/API)
+* [API](https://github.com/wildstarnasa/GeminiGUI/wiki/API)
 * Widget Attributes and Events
-  * [Base Attributes and Events](wiki/Base-Attributes-and-Events)
-  * [Standard Widgets](wiki/Standard-Widgets)
-  * [Game Specific Widgets](wiki/Game-Specific-Widgets)
+  * [Base Attributes and Events](https://github.com/wildstarnasa/GeminiGUI/wiki/Base-Attributes-and-Events)
+  * [Standard Widgets](https://github.com/wildstarnasa/GeminiGUI/wiki/Standard-Widgets)
+  * [Game Specific Widgets](https://github.com/wildstarnasa/GeminiGUI/wiki/Game-Specific-Widgets)
