@@ -374,6 +374,13 @@ function Control:AddChild(tChild)
   table.insert(self.children, tChild)
 end
 
+local function WrapCallback(func)
+  if Apollo.GetPackage("Gemini:LibError-1.0") and Apollo.GetPackage("Gemini:LibError-1.0").tPackage then
+    return function(...) local a = arg; xpcall(function() func(unpack(a)) end, Apollo.GetPackage("Gemini:LibError-1.0").tPackage.Error) end
+  end
+  return func
+end
+
 -- Add an event handler to the widget prototype
 -- @param strName The event name to be handled
 -- @param strFunction (Optional) The function name on the event handler table
@@ -383,7 +390,7 @@ end
 -- @usage myPrototype:AddEvent("ButtonSignal", function() Print("Clicked!") end) -- when the event is fired, the anonymous function will be called
 function Control:AddEvent(strName, strFunction, fnInline)
   if type(strFunction) == "function" then
-    fnInline = strFunction
+    fnInline = WrapCallback(strFunction)
     strFunction = "On" .. strName .. tostring(fnInline):gsub("function: ", "_")
   end
   
