@@ -85,6 +85,7 @@ function Lib:Create(strType, tOptions)
       widget:SetOptions(tOptions)
     end
     widget.__IsGeminiGuiPrototype = true
+    widget.tForm = widget:ParseOptions()
     return widget
   end
 end
@@ -198,9 +199,9 @@ local kSpecialFields = {
   end,
   
   PosSize = function(s, tOptions, v)
-    if type(v) ~= "table" or #v ~= 4 then return end
-    local nLeft, nTop, nWidth, nHeight = unpack(v)
-    tOptions.LAnchorPoint, tOptions.TAnchorPoint, tOptions.RAnchorPoint, tOptions.BAnchorPoint = unpack(ktAnchorPoints["TOPLEFT"])
+    if type(v) ~= "table" or (#v ~= 4 and #v ~= 5) then return end
+    local nLeft, nTop, nWidth, nHeight, strPoint = unpack(v)
+    tOptions.LAnchorPoint, tOptions.TAnchorPoint, tOptions.RAnchorPoint, tOptions.BAnchorPoint = unpack(ktAnchorPoints[strPoint or "TOPLEFT"])
     tOptions.LAnchorOffset, tOptions.TAnchorOffset, tOptions.RAnchorOffset, tOptions.BAnchorOffset = nLeft, nTop, nLeft + nWidth, nTop + nHeight
   end,
   
@@ -374,6 +375,14 @@ function Control:AddChild(tChild)
   table.insert(self.children, tChild)
 end
 
+function Control:GetChild(strName)
+  for _, child in ipairs(self.children) do
+    if child.options and child.Name and child.options.Name == strName then
+      return child
+    end
+  end
+end
+
 local function WrapCallback(func)
   if Apollo.GetPackage("Gemini:LibError-1.0") and Apollo.GetPackage("Gemini:LibError-1.0").tPackage then
     return function(...) local a = arg; xpcall(function() func(unpack(a)) end, Apollo.GetPackage("Gemini:LibError-1.0").tPackage.Error) end
@@ -440,32 +449,30 @@ end
 function Control:ToXmlDocTable(bIsForm)
   local tInlineFunctions = {}
   
-  local tForm = self:ParseOptions()
-  
   -- setup defaults and necessary values
-  tForm.__XmlNode            = bIsForm and "Form" or "Control"
-  tForm.Font                 = tForm.Font or "Default"
-  tForm.Template             = tForm.Template or "Default"
-  tForm.TooltipType          = tForm.TooltipType or "OnCursor"
+  self.tForm.__XmlNode            = bIsForm and "Form" or "Control"
+  self.tForm.Font                 = self.tForm.Font or "Default"
+  self.tForm.Template             = self.tForm.Template or "Default"
+  self.tForm.TooltipType          = self.tForm.TooltipType or "OnCursor"
   
-  if not tForm.PosX or not tForm.PosY or not tForm.Height or not tForm.Width then
-    tForm.TAnchorOffset        = tForm.TAnchorOffset or 0
-    tForm.LAnchorOffset        = tForm.LAnchorOffset or 0
-    tForm.BAnchorOffset        = tForm.BAnchorOffset or 0
-    tForm.RAnchorOffset        = tForm.RAnchorOffset or 0
+  if not self.tForm.PosX or not self.tForm.PosY or not self.tForm.Height or not self.tForm.Width then
+    self.tForm.TAnchorOffset        = self.tForm.TAnchorOffset or 0
+    self.tForm.LAnchorOffset        = self.tForm.LAnchorOffset or 0
+    self.tForm.BAnchorOffset        = self.tForm.BAnchorOffset or 0
+    self.tForm.RAnchorOffset        = self.tForm.RAnchorOffset or 0
     
-    tForm.BAnchorPoint         = tForm.BAnchorPoint  or 0
-    tForm.RAnchorPoint         = tForm.RAnchorPoint  or 0
-    tForm.TAnchorPoint         = tForm.TAnchorPoint  or 0
-    tForm.LAnchorPoint         = tForm.LAnchorPoint  or 0
+    self.tForm.BAnchorPoint         = self.tForm.BAnchorPoint  or 0
+    self.tForm.RAnchorPoint         = self.tForm.RAnchorPoint  or 0
+    self.tForm.TAnchorPoint         = self.tForm.TAnchorPoint  or 0
+    self.tForm.LAnchorPoint         = self.tForm.LAnchorPoint  or 0
   end
  
   if self.AddSubclassFields ~= nil and type(self.AddSubclassFields) == "function" then
-    self:AddSubclassFields(tForm)
+    self:AddSubclassFields(self.tForm)
   end 
   
-  tForm.Name                 = tForm.Name or kstrDefaultName
-  tForm.Class                = tForm.Class or "Window"
+  self.tForm.Name                 = self.tForm.Name or kstrDefaultName
+  self.tForm.Class                = self.tForm.Class or "Window"
   
   local tAliasEvents = {}
   local tInlineLookup = {}
@@ -474,7 +481,7 @@ function Control:ToXmlDocTable(bIsForm)
       if tEvent.strFunction:match("^Event::") then
         table.insert(tAliasEvents, tEvent)
       elseif tEvent.strFunction ~= "" then
-        table.insert(tForm, { __XmlNode = "Event", Function = tEvent.strFunction, Name = tEvent.strName })
+        table.insert(self.tForm, { __XmlNode = "Event", Function = tEvent.strFunction, Name = tEvent.strName })
         if tEvent.fnInline ~= nil then
           tInlineLookup[tEvent.strName] = tEvent.strFunction
           tInlineFunctions[tEvent.strFunction] = tEvent.fnInline
@@ -487,7 +494,7 @@ function Control:ToXmlDocTable(bIsForm)
   for _, tEvent in ipairs(tAliasEvents) do
     local strFunctionName = tInlineLookup[tEvent.strFunction:gsub("^Event::", "")]
     if strFunctionName then
-      table.insert(tForm, { __XmlNode = "Event", Function = strFunctionName, Name = tEvent.strName })
+      table.insert(self.tForm, { __XmlNode = "Event", Function = strFunctionName, Name = tEvent.strName })
     end
   end
   
@@ -496,13 +503,13 @@ function Control:ToXmlDocTable(bIsForm)
     for k,v in pairs(tPixie) do
       tPixieNode[k] = v
     end
-    table.insert(tForm, tPixieNode)
+    table.insert(self.tForm, tPixieNode)
   end
   
   for _, tChild in ipairs(self.children) do 
     if tChild.ToXmlDocTable and type(tChild.ToXmlDocTable) == "function" then
       local tXd, tIf = tChild:ToXmlDocTable()
-      table.insert(tForm, tXd)
+      table.insert(self.tForm, tXd)
       for k,v in pairs(tIf) do
         tInlineFunctions[k] = tInlineFunctions[k] or v
       end
@@ -510,14 +517,14 @@ function Control:ToXmlDocTable(bIsForm)
   end
   
   if self.oData ~= nil then
-    tForm.__GEMINIGUI_LUADATA = self.oData
+    self.tForm.__GEMINIGUI_LUADATA = self.oData
   end
     
   if bIsForm then
-    tForm = { __XmlNode = "Forms", tForm }
+    self.tForm = { __XmlNode = "Forms", self.tForm }
   end
   
-  return tForm, tInlineFunctions
+  return self.tForm, tInlineFunctions
 end
 
 -- Collect window name, data and text from the XmlDoc table (recursively)
