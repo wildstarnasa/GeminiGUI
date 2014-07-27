@@ -377,7 +377,7 @@ end
 
 function Control:GetChild(strName)
   for _, child in ipairs(self.children) do
-    if child.options and child.Name and child.options.Name == strName then
+    if child.options and child.options.Name and child.options.Name == strName then
       return child
     end
   end
