@@ -4,7 +4,7 @@
 -- @author daihenka
 -- GUI Widget Creation Library for WildStar.
 -----------------------------------------------------------------------------------------------------------------------
-local MAJOR, MINOR = "Gemini:GUI-1.0", 3
+local MAJOR, MINOR = "Gemini:GUI-1.0", 4
 local Lib = Apollo.GetPackage("Gemini:GUI-1.0") and Apollo.GetPackage("Gemini:GUI-1.0").tPackage or {}
 if Lib and (Lib._VERSION or 0) >= MINOR then
 	return -- no upgrade is needed
@@ -12,7 +12,12 @@ end
 
 local assert, tostring, error, pcall = assert, tostring, error, pcall
 local getmetatable, setmetatable, rawset, rawget, pairs = getmetatable, setmetatable, rawset, rawget, pairs
+local strlen, strformat = string.len, string.format
+local tinsert, tsort = table.insert, table.sort
 local type, next = type, next
+
+-- Wildstar APIs
+local Apollo, XmlDoc = Apollo, XmlDoc
 
 Lib._VERSION = MINOR
 Lib.WidgetRegistry = Lib.WidgetRegistry or {}
@@ -177,7 +182,7 @@ local kSpecialFields = {
   Anchor = TranslateAnchorPoint,
   
   IncludeEdgeAnchors = function(s, tOptions, v)
-    if type(v) ~= "string" and (s.options.Name == nil or string.len(s.options.Name) == 0) then
+    if type(v) ~= "string" and (s.options.Name == nil or strlen(s.options.Name) == 0) then
       error("IncludeEdgeAnchors requires a string or the control name to be set", 2)
     end
     local strPrefix = ((type(v) == "string") and v or s.options.Name)
@@ -298,10 +303,10 @@ function Control:AddPixie(tPixie)
   -- in case someone uses the C++ Window:AddPixie() format.  Preference to the XML format over the C++ Window:AddPixie() format.
   for oldKey, newKey in pairs(ktPixieMapping) do
     if tPixie[oldKey] ~= nil then
-      if type(tPixie[oldKey]) == "table" then
+      if type(tPixie[oldKey]) == "table" and type(newKey) == "table" then
         for oldKey2, newKey2 in pairs(tPixie[oldKey]) do
           if tPixie[oldKey][oldKey2] ~= nil then
-            tPixie[newKey2] = tPixie[newKey2] or tPixie[oldKey][oldKey2]
+            tPixie[newKey[oldKey2] or newKey2] = tPixie[newKey2] or tPixie[oldKey][oldKey2]
           end
         end
       else
@@ -364,14 +369,14 @@ function Control:AddPixie(tPixie)
     end
   end
   
-  table.insert(self.pixies, tPixie)
+  tinsert(self.pixies, tPixie)
 end
 
 -- Add a child widget prototype to the widget prototype
 -- @param tChild The child widget to add -- NOTE: Must be a GeminiGUI:Create() blessed prototype
 function Control:AddChild(tChild)
   if tChild == nil then return end
-  table.insert(self.children, tChild)
+  tinsert(self.children, tChild)
 end
 
 local function WrapCallback(func)
@@ -394,7 +399,7 @@ function Control:AddEvent(strName, strFunction, fnInline)
     strFunction = "On" .. strName .. tostring(fnInline):gsub("function: ", "_")
   end
   
-  table.insert(self.events, {strName = strName, strFunction = strFunction, fnInline = fnInline })
+  tinsert(self.events, {strName = strName, strFunction = strFunction, fnInline = fnInline })
 end
 
 -- Set the data the widget is to store
@@ -472,9 +477,9 @@ function Control:ToXmlDocTable(bIsForm)
   for _, tEvent in ipairs(self.events) do
     if tEvent.strName and tEvent.strFunction and tEvent.strName ~= "" then 
       if tEvent.strFunction:match("^Event::") then
-        table.insert(tAliasEvents, tEvent)
+        tinsert(tAliasEvents, tEvent)
       elseif tEvent.strFunction ~= "" then
-        table.insert(tForm, { __XmlNode = "Event", Function = tEvent.strFunction, Name = tEvent.strName })
+        tinsert(tForm, { __XmlNode = "Event", Function = tEvent.strFunction, Name = tEvent.strName })
         if tEvent.fnInline ~= nil then
           tInlineLookup[tEvent.strName] = tEvent.strFunction
           tInlineFunctions[tEvent.strFunction] = tEvent.fnInline
@@ -487,7 +492,7 @@ function Control:ToXmlDocTable(bIsForm)
   for _, tEvent in ipairs(tAliasEvents) do
     local strFunctionName = tInlineLookup[tEvent.strFunction:gsub("^Event::", "")]
     if strFunctionName then
-      table.insert(tForm, { __XmlNode = "Event", Function = strFunctionName, Name = tEvent.strName })
+      tinsert(tForm, { __XmlNode = "Event", Function = strFunctionName, Name = tEvent.strName })
     end
   end
   
@@ -496,13 +501,13 @@ function Control:ToXmlDocTable(bIsForm)
     for k,v in pairs(tPixie) do
       tPixieNode[k] = v
     end
-    table.insert(tForm, tPixieNode)
+    tinsert(tForm, tPixieNode)
   end
   
   for _, tChild in ipairs(self.children) do 
     if tChild.ToXmlDocTable and type(tChild.ToXmlDocTable) == "function" then
       local tXd, tIf = tChild:ToXmlDocTable()
-      table.insert(tForm, tXd)
+      tinsert(tForm, tXd)
       for k,v in pairs(tIf) do
         tInlineFunctions[k] = tInlineFunctions[k] or v
       end
@@ -532,14 +537,9 @@ local function CollectNameData(tXml, tData, strNamespace)
   
   for i, t in ipairs(tXml) do
     if t.__XmlNode == "Control" then -- only process controls (aka children)
-      local strName = t.Name
-      local strNS = string.format("%s%s%s", strNamespace, strNamespace:len() > 0 and ":" or "", strName)
-      while (strName or "") == "" or tData[strNS] ~= nil do
-        -- window name already exists at this child depth, rename it temporarily
-        nCount = nCount + 1
-        strName = "GeminiGUIWindow." .. nCount
-        strNS = string.format("%s%s%s", strNamespace, strNamespace:len() > 0 and ":" or "", strName)
-      end
+      nCount = nCount + 1
+      local strName = strformat("%s.%s",(t.Name or "GeminiGUIWindow"), nCount)
+      local strNS = strformat("%s%s%s", strNamespace, strNamespace:len() > 0 and ":" or "", strName)
       
       local strFinalName = t.Name or strName
       
@@ -568,9 +568,9 @@ local function FinalizeWindow(wnd, tData)
   local tChildOrder = {}
   for strNS, _ in pairs(tData) do
     local _, nCount = strNS:gsub(":", "")
-    table.insert(tChildOrder, { strNS, nCount })
+    tinsert(tChildOrder, { strNS, nCount })
   end
-  table.sort(tChildOrder, function(a,b) return a[2] > b[2] end)
+  tsort(tChildOrder, function(a,b) return a[2] > b[2] end)
   
   -- process child windows in depth order, setting their data, AML and
   -- renaming them back to what they are intended to be
@@ -591,6 +591,11 @@ local function FinalizeWindow(wnd, tData)
   end
 end
 
+function Control:Initialize()
+  self.events = {}
+  self.children = {}
+  self.pixies = {}
+end
 
 -- Gets an instance of the widget
 -- @param eventHandler The eventHandler of the widget
@@ -601,6 +606,9 @@ function Control:GetInstance(eventHandler, wndParent)
   if type(eventHandler) ~= "table" then
     error("Usage: EventHandler is not valid.  Must be a table.")
   end
+
+  self:Initialize()
+
   local xdt, tInlines = self:ToXmlDocTable(true)
   
   for k,v in pairs(tInlines) do
@@ -627,7 +635,7 @@ function Control:GetInstance(eventHandler, wndParent)
 --    Print("GeminiGUI failed to create window")
   end
   
-  return wnd
+  return wnd, eventHandler
 end
 end
 --[[ File: widgets/Window.lua ]]--
@@ -1047,7 +1055,7 @@ function Grid:AddColumn(tColumn)
     tColumn.SimpleSort = true
   end
   
-  table.insert(self.columns, tColumn)
+  tinsert(self.columns, tColumn)
 end
 
 function Grid:AddSubclassFields(tForm)
@@ -1067,7 +1075,7 @@ function Grid:AddSubclassFields(tForm)
       for k,v in pairs(tColumn) do
         tNode[k] = v
       end
-      table.insert(tForm, tNode)
+      tinsert(tForm, tNode)
     end
   end
 end
